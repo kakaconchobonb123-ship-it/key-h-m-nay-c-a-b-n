@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LimboHub - Hệ Thống Key Bảo Mật</title>
+    <title>LimboHub - Hệ Thống Key Bảo Mật 24H</title>
     <style>
         body {
             margin: 0;
@@ -116,7 +116,7 @@
 
     <div class="container">
         <h2>LIMBOHUB</h2>
-        <div class="brand">XÁC THỰC KEY BẢO MẬT</div>
+        <div class="brand">XÁC THỰC KEY BẢO MẬT (24H)</div>
 
         <div class="key-box" id="keyDisplay">Đang tải key...</div>
         <div class="timer" id="timerDisplay">Thời gian: Đang cập nhật...</div>
@@ -131,7 +131,7 @@
     </div>
 
     <script>
-        // Cập nhật thời gian hết hạn thành 24 giờ (24 * 60 * 60 * 1000 ms)
+        // Thời gian hết hạn chuẩn xác là 24 giờ (tính bằng mili-giây)
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000; 
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số nhận diện ngẫu nhiên
 
@@ -142,7 +142,7 @@
         }
 
         function createSignature(str) {
-            let secretSalt = "limbohub_secure_24h";
+            let secretSalt = "limbohub_secure_24h_v2";
             let hash = 0;
             let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
@@ -154,13 +154,13 @@
         }
 
         function initKeySystem() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key_24h"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
                 let brandPrefix = getSecretBrand(); // Lấy chữ TH ẩn
                 
-                // Chọn ngẫu nhiên 1 trong 3 số (71, 92, 13) cho máy này
+                // Chọn ngẫu nhiên 1 trong 3 số (71, 92, 13) cho thiết bị này
                 let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
                 
                 let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -175,27 +175,28 @@
                     identifier: chosenIdentifier, // Lưu lại số đã chọn để đối chiếu
                     expiresAt: now + EXPIRATION_TIME
                 };
-                localStorage.setItem("limbohub_secure_key", JSON.stringify(currentKeyData));
+                localStorage.setItem("limbohub_secure_key_24h", JSON.stringify(currentKeyData));
             }
 
             updateUI();
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key_24h"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
             let timeLeft = currentKeyData.expiresAt - now;
 
             if (timeLeft <= 0) {
-                document.getElementById("keyDisplay").innerText = "KEY ĐÃ HẾT HẠN!";
+                document.getElementById("keyDisplay").innerText = "KEY ĐÃ HẾT HẠN (24H)!";
                 document.getElementById("timerDisplay").innerText = "⚠️ Cần vượt link để lấy key mới!";
                 document.getElementById("actionBtn").innerText = "Vượt link lấy key mới";
                 document.getElementById("actionBtn").style.background = "linear-gradient(135deg, #ff9900, #cc6600)";
             } else {
                 document.getElementById("keyDisplay").innerText = currentKeyData.key;
                 
+                // Hiển thị đếm ngược thời gian chuẩn 24 giờ
                 let hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 let minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                 let seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
@@ -208,7 +209,7 @@
 
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key_24h"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -228,11 +229,11 @@
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key_24h"));
             let now = new Date().getTime();
 
             if (currentKeyData && now > currentKeyData.expiresAt) {
-                localStorage.removeItem("limbohub_secure_key");
+                localStorage.removeItem("limbohub_secure_key_24h");
                 alert("Đang chuyển hướng sang trang vượt link...");
                 location.reload(); 
             } else {
