@@ -18,7 +18,7 @@
             overflow: hidden;
         }
 
-        /* Chữ LIMBOHUB ẩn ở rất xa để hệ thống nhận diện ngầm làm đầu key */
+        /* Chữ LIMBOHUB ẩn ở rất xa để hệ thống nhận diện ngầm */
         .hidden-brand-token {
             position: absolute;
             top: -9999px;
@@ -111,7 +111,7 @@
 </head>
 <body>
 
-    <!-- Chữ LIMBOHUB ẩn ở rất xa để làm tiền tố cho key -->
+    <!-- Chữ LIMBOHUB ẩn ở rất xa theo ý bạn -->
     <div class="hidden-brand-token" id="secretBrand">LIMBOHUB</div>
 
     <div class="container">
@@ -134,14 +134,14 @@
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000; // Hết hạn sau 24 giờ
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số nhận diện ngẫu nhiên ở cuối
 
-        // Lấy chữ LIMBOHUB từ token ẩn ở xa để đưa lên đầu key
+        // Lấy chữ LIMBOHUB từ token ẩn ở xa
         function getBrandPrefix() {
             let element = document.getElementById("secretBrand");
             return element ? element.innerText : "LIMBOHUB";
         }
 
         function createSignature(str) {
-            let secretSalt = "limbohub_secure_24h_v3";
+            let secretSalt = "limbohub_secure_24h_v4";
             let hash = 0;
             let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
@@ -153,35 +153,35 @@
         }
 
         function initKeySystem() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v3"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v4"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
-                let brandPrefix = getBrandPrefix(); // Lấy chữ LIMBOHUB
+                let brandPrefix = getBrandPrefix(); // Luôn lấy chữ LIMBOHUB làm gốc
                 
-                // Chọn ngẫu nhiên 1 trong 3 số (71, 92, 13) cho thiết bị này
+                // Chọn ngẫu nhiên 1 trong 3 số (71, 92, 13) cho thiết bị này ở đuôi
                 let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
                 
                 let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
                 let rawString = brandPrefix + "-" + randomPart + "-" + now;
                 let signature = createSignature(rawString);
                 
-                // Key chuẩn có dạng: LIMBOHUB-[Mã ngẫu nhiên]-[Mã hóa]-[Số 71/92/13]
-                let secureKey = brandPrefix + "-" + randomPart + "-" + signature + chosenIdentifier;
+                // Cấu trúc key hoàn chỉnh: LUÔN BẮT ĐẦU BẰNG CHỮ LIMBOHUB
+                let secureKey = brandPrefix + "-" + randomPart + "-" + signature + "-" + chosenIdentifier;
 
                 currentKeyData = {
                     key: secureKey,
                     identifier: chosenIdentifier, 
                     expiresAt: now + EXPIRATION_TIME
                 };
-                localStorage.setItem("limbohub_key_v3", JSON.stringify(currentKeyData));
+                localStorage.setItem("limbohub_key_v4", JSON.stringify(currentKeyData));
             }
 
             updateUI();
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v3"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v4"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
@@ -207,7 +207,7 @@
 
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v3"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v4"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -216,22 +216,22 @@
                 return;
             }
 
-            // Kiểm tra khớp key và đúng đuôi số nhận diện (71, 92 hoặc 13)
-            if (inputVal === currentKeyData.key && inputVal.endsWith(currentKeyData.identifier)) {
-                document.getElementById("statusMsg").innerText = `✅ Xác thực thành công! (Nhận diện đuôi: ${currentKeyData.identifier})`;
+            // Kiểm tra khớp key, bắt đầu bằng LIMBOHUB và đúng đuôi số nhận diện
+            if (inputVal === currentKeyData.key && inputVal.startsWith("LIMBOHUB") && inputVal.endsWith(currentKeyData.identifier)) {
+                document.getElementById("statusMsg").innerText = `✅ Xác thực thành công! (Đuôi nhận diện: ${currentKeyData.identifier})`;
                 alert("Thành công! Key của bạn hoàn toàn chính xác.");
             } else {
-                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc không đúng số nhận diện hợp lệ!";
-                alert("Thất bại! Key không đúng hoặc sai mã nhận diện của hệ thống.");
+                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc không đúng định dạng!";
+                alert("Thất bại! Key không đúng, thiếu chữ LIMBOHUB hoặc sai mã nhận diện.");
             }
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v3"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v4"));
             let now = new Date().getTime();
 
             if (currentKeyData && now > currentKeyData.expiresAt) {
-                localStorage.removeItem("limbohub_key_v3");
+                localStorage.removeItem("limbohub_key_v4");
                 alert("Đang chuyển hướng sang trang vượt link...");
                 location.reload(); 
             } else {
