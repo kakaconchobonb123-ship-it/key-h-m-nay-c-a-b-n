@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LimboHub - Hệ Thống Key Bảo Mật</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0d0d0d;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            background: linear-gradient(145deg, #161616, #1c1c1c);
+            border: 2px solid #ff3b3b;
+            box-shadow: 0 0 25px rgba(255, 59, 59, 0.4);
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 420px;
+        }
+
+        h2 {
+            color: #ff3b3b;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .brand {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+
+        .key-box {
+            background-color: #111;
+            border: 1px dashed #ff3b3b;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #00ffcc;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            word-break: break-all;
+        }
+
+        .timer {
+            font-size: 14px;
+            color: #ffcc00;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 6px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff3b3b, #b30000);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.3s;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .status {
+            font-size: 13px;
+            color: #aaa;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>LIMBOHUB</h2>
+        <div class="brand">XÁC THỰC KEY BẢO MẬT</div>
+
+        <div class="key-box" id="keyDisplay">Đang tải key...</div>
+        <div class="timer" id="timerDisplay">Thời gian: Đang cập nhật...</div>
+
+        <!-- Ô để người chơi nhập key vào kiểm tra -->
+        <input type="text" id="userInputKey" placeholder="Nhập key của bạn vào đây...">
+        <button onclick="verifyKey()">Kiểm tra & Xác thực Key</button>
+        
+        <button id="actionBtn" style="background: #333;" onclick="handleAction()">Sao chép key</button>
+        
+        <div class="status" id="statusMsg">Trạng thái: Sẵn sàng</div>
+    </div>
+
+    <script>
+        const EXPIRATION_TIME = 2 * 60 * 60 * 1000; // 2 tiếng
+        const SECRET_SALT = "limbohub_secure_salt_2026"; // Mã ẩn dùng để tạo chữ ký độc quyền
+
+        // Hàm tạo mã băm đơn giản nhưng cực kỳ khó đoán (Chống nhập bừa)
+        function createSignature(str) {
+            let hash = 0;
+            let combined = str + SECRET_SALT;
+            for (let i = 0; i < combined.length; i++) {
+                let char = combined.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash |= 0; 
+            }
+            return Math.abs(hash).toString(36).toUpperCase();
+        }
+
+        function initKeySystem() {
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let now = new Date().getTime();
+
+            // Nếu chưa có key hoặc key đã hết hạn -> Tạo key mới có gắn mã ẩn
+            if (!currentKeyData || now > currentKeyData.expiresAt) {
+                let randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+                let rawString = "LH-" + randomPart + "-" + now;
+                let signature = createSignature(rawString);
+                
+                // Key chuẩn sẽ có dạng: limbohub-RANDOM-SIGNATURE
+                let secureKey = "limbohub-" + randomPart.toUpperCase() + "-" + signature;
+
+                currentKeyData = {
+                    key: secureKey,
+                    expiresAt: now + EXPIRATION_TIME,
+                    used: false
+                };
+                localStorage.setItem("limbohub_secure_key", JSON.stringify(currentKeyData));
+            }
+
+            updateUI();
+        }
+
+        function updateUI() {
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            if (!currentKeyData) return;
+
+            let now = new Date().getTime();
+            let timeLeft = currentKeyData.expiresAt - now;
+
+            if (timeLeft <= 0) {
+                document.getElementById("keyDisplay").innerText = "KEY ĐÃ HẾT HẠN!";
+                document.getElementById("timerDisplay").innerText = "⚠️ Cần vượt link để lấy key mới!";
+                document.getElementById("actionBtn").innerText = "Vượt link lấy key mới";
+                document.getElementById("actionBtn").style.background = "linear-gradient(135deg, #ff9900, #cc6600)";
+            } else {
+                document.getElementById("keyDisplay").innerText = currentKeyData.key;
+                
+                let hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                let minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                let seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+                
+                document.getElementById("timerDisplay").innerText = `Hết hạn sau: ${hours}h ${minutes}m ${seconds}s`;
+                document.getElementById("actionBtn").innerText = "Sao chép key";
+                document.getElementById("actionBtn").style.background = "linear-gradient(135deg, #333, #555)";
+            }
+        }
+
+        function verifyKey() {
+            let inputVal = document.getElementById("userInputKey").value.trim();
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let now = new Date().getTime();
+
+            if (!currentKeyData || now > currentKeyData.expiresAt) {
+                document.getElementById("statusMsg").innerText = "❌ Key đã hết hạn, vui lòng lấy key mới!";
+                return;
+            }
+
+            // Kiểm tra xem người chơi nhập có khớp chuẩn với mã ẩn của hệ thống không
+            if (inputVal === currentKeyData.key) {
+                document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key hợp lệ.";
+                alert("Thành công! Key của bạn chính xác.");
+            } else {
+                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc key không tồn tại!";
+                alert("Thất bại! Key bạn nhập không đúng hoặc đã bị chỉnh sửa giả mạo.");
+            }
+        }
+
+        function handleAction() {
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
+            let now = new Date().getTime();
+
+            if (currentKeyData && now > currentKeyData.expiresAt) {
+                // Hết hạn thì reset để tạo vòng mới (vượt link)
+                localStorage.removeItem("limbohub_secure_key");
+                alert("Đang chuyển hướng sang trang vượt link...");
+                location.reload();
+            } else {
+                // Sao chép key
+                let keyText = currentKeyData.key;
+                navigator.clipboard.writeText(keyText).then(() => {
+                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép key vào bộ nhớ tạm!";
+                });
+            }
+        }
+
+        setInterval(updateUI, 1000);
+        window.onload = initKeySystem;
+    </script>
+</body>
+</html>
