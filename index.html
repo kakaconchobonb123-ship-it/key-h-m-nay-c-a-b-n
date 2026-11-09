@@ -18,6 +18,16 @@
             overflow: hidden;
         }
 
+        /* CHỮ TH ẨN Ở RẤT XA: Người chơi tuyệt đối không nhìn thấy nhưng hệ thống vẫn quét để xác thực */
+        .hidden-th-token {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         .container {
             text-align: center;
             background: linear-gradient(145deg, #161616, #1c1c1c);
@@ -47,7 +57,7 @@
             background-color: #111;
             border: 1px dashed #ff3b3b;
             padding: 12px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             color: #00ffcc;
             border-radius: 8px;
@@ -101,6 +111,9 @@
 </head>
 <body>
 
+    <!-- Yếu tố chữ TH ẩn ở rất xa theo ý bạn -->
+    <div class="hidden-th-token" id="secretTH">TH</div>
+
     <div class="container">
         <h2>LIMBOHUB</h2>
         <div class="brand">XÁC THỰC KEY BẢO MẬT</div>
@@ -108,7 +121,7 @@
         <div class="key-box" id="keyDisplay">Đang tải key...</div>
         <div class="timer" id="timerDisplay">Thời gian: Đang cập nhật...</div>
 
-        <!-- Ô để người chơi nhập key vào kiểm tra -->
+        <!-- Ô để người chơi nhập key -->
         <input type="text" id="userInputKey" placeholder="Nhập key của bạn vào đây...">
         <button onclick="verifyKey()">Kiểm tra & Xác thực Key</button>
         
@@ -118,13 +131,19 @@
     </div>
 
     <script>
-        const EXPIRATION_TIME = 2 * 60 * 60 * 1000; // 2 tiếng
-        const SECRET_SALT = "limbohub_secure_salt_2026"; // Mã ẩn dùng để tạo chữ ký độc quyền
+        const EXPIRATION_TIME = 2 * 60 * 60 * 1000; // Thời gian hết hạn (2 tiếng)
 
-        // Hàm tạo mã băm đơn giản nhưng cực kỳ khó đoán (Chống nhập bừa)
+        // Hàm lấy chữ TH ẩn từ xa để kết hợp sinh mã nhận diện
+        function getSecretBrand() {
+            let element = document.getElementById("secretTH");
+            return element ? element.innerText : "TH";
+        }
+
+        // Thuật toán tạo chữ ký số độc quyền (chống nhập bừa, chống giả mạo)
         function createSignature(str) {
+            let secretSalt = "limbohub_secure_salt_2026";
             let hash = 0;
-            let combined = str + SECRET_SALT;
+            let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
                 let char = combined.charCodeAt(i);
                 hash = ((hash << 5) - hash) + char;
@@ -137,19 +156,19 @@
             let currentKeyData = JSON.parse(localStorage.getItem("limbohub_secure_key"));
             let now = new Date().getTime();
 
-            // Nếu chưa có key hoặc key đã hết hạn -> Tạo key mới có gắn mã ẩn
+            // Nếu chưa có key hoặc key cũ đã hết hạn -> Tạo key mới dựa trên chữ TH ẩn
             if (!currentKeyData || now > currentKeyData.expiresAt) {
+                let brandPrefix = getSecretBrand(); // Lấy chữ TH ẩn từ xa
                 let randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-                let rawString = "LH-" + randomPart + "-" + now;
+                let rawString = brandPrefix + "-" + randomPart + "-" + now;
                 let signature = createSignature(rawString);
                 
-                // Key chuẩn sẽ có dạng: limbohub-RANDOM-SIGNATURE
-                let secureKey = "limbohub-" + randomPart.toUpperCase() + "-" + signature;
+                // Key hoàn chỉnh có dạng: TH-RANDOM-SIGNATURE
+                let secureKey = brandPrefix + "-" + randomPart + "-" + signature;
 
                 currentKeyData = {
                     key: secureKey,
-                    expiresAt: now + EXPIRATION_TIME,
-                    used: false
+                    expiresAt: now + EXPIRATION_TIME
                 };
                 localStorage.setItem("limbohub_secure_key", JSON.stringify(currentKeyData));
             }
@@ -188,17 +207,18 @@
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
-                document.getElementById("statusMsg").innerText = "❌ Key đã hết hạn, vui lòng lấy key mới!";
+                document.getElementById("statusMsg").innerText = "❌ Key đã hết hạn, vui lòng vượt link lấy key mới!";
+                alert("Key đã hết hạn! Vui lòng bấm vượt link để tạo key mới.");
                 return;
             }
 
-            // Kiểm tra xem người chơi nhập có khớp chuẩn với mã ẩn của hệ thống không
+            // Kiểm tra xem người chơi nhập có khớp chuẩn xác với key bảo mật của máy không
             if (inputVal === currentKeyData.key) {
-                document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key hợp lệ.";
-                alert("Thành công! Key của bạn chính xác.");
+                document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key chuẩn xác.";
+                alert("Thành công! Key của bạn hoàn toàn chính xác.");
             } else {
-                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc key không tồn tại!";
-                alert("Thất bại! Key bạn nhập không đúng hoặc đã bị chỉnh sửa giả mạo.");
+                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc key giả mạo!";
+                alert("Thất bại! Key không đúng, bạn không thể nhập bừa.");
             }
         }
 
@@ -207,15 +227,15 @@
             let now = new Date().getTime();
 
             if (currentKeyData && now > currentKeyData.expiresAt) {
-                // Hết hạn thì reset để tạo vòng mới (vượt link)
+                // Hết hạn -> Xóa key cũ, chuẩn bị vượt link tạo chu kỳ mới
                 localStorage.removeItem("limbohub_secure_key");
                 alert("Đang chuyển hướng sang trang vượt link...");
-                location.reload();
+                location.reload(); 
             } else {
                 // Sao chép key
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
-                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép key vào bộ nhớ tạm!";
+                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép key thành công!";
                 });
             }
         }
