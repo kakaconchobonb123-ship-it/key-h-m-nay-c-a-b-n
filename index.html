@@ -108,7 +108,7 @@
             margin-top: 10px;
         }
 
-        /* Màn hình khóa khi hết 5 phút hoặc hết hạn */
+        /* Màn hình khóa khi vào trực tiếp hoặc hết hạn/hết 5 phút */
         #lockScreen {
             display: none;
             position: fixed;
@@ -131,6 +131,7 @@
         #lockScreen p {
             color: #ccc;
             font-size: 15px;
+            max-width: 400px;
         }
     </style>
 </head>
@@ -156,17 +157,19 @@
         <div class="status" id="statusMsg">Trạng thái: Sẵn sàng</div>
     </div>
 
-    <!-- Màn hình biến mất sau 5 phút hoặc hết hạn -->
+    <!-- Màn hình khóa khi chưa vượt link hoặc hết hạn -->
     <div id="lockScreen">
-        <h1>🔒 TRANG WEB ĐÃ ĐÓNG</h1>
-        <p id="lockMsg">Phiên làm việc đã kết thúc. Vui lòng vượt link mới để lấy key mới!</p>
-        <button style="max-width: 250px; margin-top: 20px; background: linear-gradient(135deg, #ff9900, #cc6600);" onclick="location.reload()">Vượt link lấy key mới</button>
+        <h1>🔒 YÊU CẦU VƯỢT LINK</h1>
+        <p id="lockMsg">Bạn chưa vượt link hoặc phiên làm việc đã kết thúc. Vui lòng bấm vào nút bên dưới để vượt link lấy key mới!</p>
+        <button style="max-width: 280px; margin-top: 15px; background: linear-gradient(135deg, #ff9900, #cc6600);" onclick="goToBypassLink()">Vượt Link Lấy Key Mới</button>
+        <button style="max-width: 280px; margin-top: 10px; background: linear-gradient(135deg, #333, #555);" onclick="closeTabAction()">Đóng Tab</button>
     </div>
 
     <script>
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000; // Hiệu lực 24 giờ
         const DESTROY_TIME = 5 * 60 * 1000; // Đóng web sau 5 phút kể từ lúc copy
-        const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số ngẫu nhiên chọn 1
+        const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số ngẫu nhiên chọn 1 đuôi
+        const BYPASS_URL = "https://link4m.net/WMuZuX"; // Link vượt của bạn
 
         function getBrandPrefix() {
             let element = document.getElementById("secretBrand");
@@ -175,7 +178,7 @@
         }
 
         function createSignature(str) {
-            let secretSalt = "limbohub_secure_clean_v7";
+            let secretSalt = "limbohub_secure_bypass_v9";
             let hash = 0;
             let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
@@ -187,11 +190,24 @@
         }
 
         function initKeySystem() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v7"));
+            const urlParams = new URLSearchParams(window.location.search);
+            let isFromBypass = urlParams.has("bypass") || sessionStorage.getItem("limbohub_passed") === "true";
+
+            // Nếu người chơi truy cập trực tiếp bằng cách dán link cũ mà không có thông lượng vượt link
+            if (!isFromBypass) {
+                triggerLockScreen("Phát hiện truy cập trực tiếp hoặc chưa vượt link! Vui lòng vượt link để nhận key mới.");
+                return;
+            }
+
+            // Đánh dấu đã xác thực qua link vượt trong phiên làm việc
+            sessionStorage.setItem("limbohub_passed", "true");
+
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
             let now = new Date().getTime();
 
+            // Nếu chưa có key, hoặc hết hạn 24h, hoặc đã kích hoạt tự hủy 5 phút -> cấp key mới ngẫu nhiên
             if (!currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
-                localStorage.removeItem("limbohub_key_v7");
+                localStorage.removeItem("limbohub_key_v9");
 
                 let brandPrefix = getBrandPrefix();
                 let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
@@ -208,7 +224,7 @@
                     expiresAt: now + EXPIRATION_TIME,
                     destroyAt: null
                 };
-                localStorage.setItem("limbohub_key_v7", JSON.stringify(currentKeyData));
+                localStorage.setItem("limbohub_key_v9", JSON.stringify(currentKeyData));
             }
 
             if (currentKeyData.destroyAt && now >= currentKeyData.destroyAt) {
@@ -220,7 +236,7 @@
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v7"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
@@ -256,15 +272,26 @@
         }
 
         function triggerLockScreen(msg) {
-            localStorage.removeItem("limbohub_key_v7");
+            localStorage.removeItem("limbohub_key_v9");
+            sessionStorage.removeItem("limbohub_passed");
             document.getElementById("mainContainer").style.display = "none";
             document.getElementById("lockMsg").innerText = msg;
             document.getElementById("lockScreen").style.display = "flex";
         }
 
+        // Chuyển hướng người chơi sang link vượt link của bạn
+        function goToBypassLink() {
+            window.location.href = BYPASS_URL;
+        }
+
+        function closeTabAction() {
+            window.close();
+            window.location.href = "about:blank";
+        }
+
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v7"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -272,7 +299,6 @@
                 return;
             }
 
-            // Kiểm tra khớp key, bắt đầu bằng LIMBOHUB và đúng đuôi ngầm -> Chỉ báo đúng/sai chung chung không lộ đuôi
             if (inputVal === currentKeyData.key && inputVal.startsWith("LIMBOHUB") && inputVal.endsWith(currentKeyData.identifier)) {
                 document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key hợp lệ.";
                 alert("Thành công! Key của bạn chính xác.");
@@ -283,7 +309,7 @@
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v7"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
             let now = new Date().getTime();
 
             if (!currentKeyData) return;
@@ -291,8 +317,8 @@
             if (!currentKeyData.destroyAt) {
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
-                    currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút tự hủy
-                    localStorage.setItem("limbohub_key_v7", JSON.stringify(currentKeyData));
+                    currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút
+                    localStorage.setItem("limbohub_key_v9", JSON.stringify(currentKeyData));
                     document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ đóng sau 5 phút.";
                 });
             }
@@ -303,4 +329,3 @@
     </script>
 </body>
 </html>
-
