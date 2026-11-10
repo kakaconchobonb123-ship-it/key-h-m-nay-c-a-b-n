@@ -18,7 +18,7 @@
             overflow: hidden;
         }
 
-        /* Chữ LIMBOHUB ẩn ở rất xa theo yêu cầu bảo mật của bạn */
+        /* Chữ LIMBOHUB ẩn ở rất xa theo yêu cầu bảo mật */
         .hidden-brand-token {
             position: absolute;
             top: -9999px;
@@ -107,6 +107,31 @@
             color: #aaa;
             margin-top: 10px;
         }
+
+        /* Màn hình khóa khi hết 5 phút hoặc hết hạn */
+        #lockScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0d0d0d;
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        #lockScreen h1 {
+            color: #ff3b3b;
+            margin-bottom: 10px;
+        }
+        #lockScreen p {
+            color: #ccc;
+            font-size: 15px;
+        }
     </style>
 </head>
 <body>
@@ -114,7 +139,8 @@
     <!-- Thẻ ẩn chứa chữ LIMBOHUB ở rất xa -->
     <div class="hidden-brand-token" id="secretBrand">LIMBOHUB</div>
 
-    <div class="container">
+    <!-- Giao diện chính -->
+    <div class="container" id="mainContainer">
         <h2>LIMBOHUB</h2>
         <div class="brand">XÁC THỰC KEY BẢO MẬT (24H)</div>
 
@@ -130,11 +156,18 @@
         <div class="status" id="statusMsg">Trạng thái: Sẵn sàng</div>
     </div>
 
+    <!-- Màn hình biến mất/khóa trang web sau 5 phút hoặc hết hạn -->
+    <div id="lockScreen">
+        <h1>🔒 TRANG WEB ĐÃ ĐÓNG</h1>
+        <p id="lockMsg">Phiên làm việc đã kết thúc. Vui lòng vượt link mới để lấy key mới!</p>
+        <button style="max-width: 250px; margin-top: 20px; background: linear-gradient(135deg, #ff9900, #cc6600);" onclick="location.reload()">Vượt link lấy key mới</button>
+    </div>
+
     <script>
-        const EXPIRATION_TIME = 24 * 60 * 60 * 1000; // Hết hạn sau 24 giờ
+        const EXPIRATION_TIME = 24 * 60 * 60 * 1000; // Key có hiệu lực 24 giờ
+        const DESTROY_TIME = 5 * 60 * 1000; // Đóng web sau 5 phút kể từ lúc lấy key
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số nhận diện ngẫu nhiên ở cuối
 
-        // Hàm lấy chữ LIMBOHUB an toàn tuyệt đối (có giá trị dự phòng nếu thẻ ẩn chậm load)
         function getBrandPrefix() {
             let element = document.getElementById("secretBrand");
             let val = element ? element.innerText.trim() : "";
@@ -142,7 +175,7 @@
         }
 
         function createSignature(str) {
-            let secretSalt = "limbohub_secure_fixed_v5";
+            let secretSalt = "limbohub_secure_5min_v6";
             let hash = 0;
             let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
@@ -154,48 +187,68 @@
         }
 
         function initKeySystem() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v5"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v6"));
             let now = new Date().getTime();
 
-            if (!currentKeyData || now > currentKeyData.expiresAt) {
-                let brandPrefix = getBrandPrefix(); // Lấy chữ LIMBOHUB
-                
-                // Chọn ngẫu nhiên 1 trong 3 số (71, 92, 13) cho thiết bị này ở đuôi
+            // Nếu chưa có key, hoặc key quá 24h, hoặc đã kích hoạt lệnh tự hủy 5 phút trước đó -> Tạo key mới
+            if (!currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
+                // Xóa sạch trạng thái cũ để cấp key ngẫu nhiên hoàn toàn mới
+                localStorage.removeItem("limbohub_key_v6");
+
+                let brandPrefix = getBrandPrefix(); // Luôn lấy chữ LIMBOHUB làm gốc
                 let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
                 
                 let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
                 let rawString = brandPrefix + "-" + randomPart + "-" + now;
                 let signature = createSignature(rawString);
                 
-                // Ghép chuẩn xác: LIMBOHUB - [Ngẫu nhiên] - [Mã hóa] - [71/92/13]
                 let secureKey = brandPrefix + "-" + randomPart + "-" + signature + "-" + chosenIdentifier;
 
                 currentKeyData = {
                     key: secureKey,
                     identifier: chosenIdentifier, 
-                    expiresAt: now + EXPIRATION_TIME
+                    expiresAt: now + EXPIRATION_TIME,
+                    destroyAt: null // Chưa kích hoạt đếm ngược 5 phút
                 };
-                localStorage.setItem("limbohub_key_v5", JSON.stringify(currentKeyData));
+                localStorage.setItem("limbohub_key_v6", JSON.stringify(currentKeyData));
+            }
+
+            // Kiểm tra nếu đã đến thời điểm tự hủy (sau 5 phút bấm copy)
+            if (currentKeyData.destroyAt && now >= currentKeyData.destroyAt) {
+                triggerLockScreen("Đã hết thời gian 5 phút. Trang web đã tự động đóng!");
+                return;
             }
 
             updateUI();
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v5"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v6"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
-            let timeLeft = currentKeyData.expiresAt - now;
 
+            // Kiểm tra nếu đang trong tiến trình đếm ngược 5 phút tự hủy
+            if (currentKeyData.destroyAt) {
+                let timeLeftDestroy = currentKeyData.destroyAt - now;
+                if (timeLeftDestroy <= 0) {
+                    triggerLockScreen("Đã hết thời gian 5 phút. Trang web đã tự động đóng!");
+                    return;
+                }
+                let min = Math.floor((timeLeftDestroy % (1000 * 60 * 60)) / (1000 * 60));
+                let sec = Math.floor((timeLeftDestroy % (1000 * 60)) / 1000);
+                document.getElementById("timerDisplay").innerText = `⚠️ Web sẽ tự đóng sau: ${min}m ${sec}s`;
+                document.getElementById("keyDisplay").innerText = currentKeyData.key;
+                document.getElementById("actionBtn").innerText = "Đã sao chép";
+                document.getElementById("actionBtn").style.background = "#222";
+                return;
+            }
+
+            let timeLeft = currentKeyData.expiresAt - now;
             if (timeLeft <= 0) {
-                document.getElementById("keyDisplay").innerText = "KEY ĐÃ HẾT HẠN (24H)!";
-                document.getElementById("timerDisplay").innerText = "⚠️ Cần vượt link để lấy key mới!";
-                document.getElementById("actionBtn").innerText = "Vượt link lấy key mới";
-                document.getElementById("actionBtn").style.background = "linear-gradient(135deg, #ff9900, #cc6600)";
+                triggerLockScreen("Key đã hết hạn 24 giờ. Vui lòng vượt link lấy key mới!");
             } else {
                 document.getElementById("keyDisplay").innerText = currentKeyData.key;
-                
                 let hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 let minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                 let seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
@@ -206,39 +259,45 @@
             }
         }
 
+        function triggerLockScreen(msg) {
+            localStorage.removeItem("limbohub_key_v6");
+            document.getElementById("mainContainer").style.display = "none";
+            document.getElementById("lockMsg").innerText = msg;
+            document.getElementById("lockScreen").style.display = "flex";
+        }
+
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v5"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v6"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
-                document.getElementById("statusMsg").innerText = "❌ Key đã hết hạn, vui lòng vượt link lấy key mới!";
-                alert("Key đã hết hạn! Vui lòng bấm vượt link để tạo key mới.");
+                triggerLockScreen("Key đã hết hạn! Vui lòng vượt link lấy key mới.");
                 return;
             }
 
-            // Kiểm tra bắt đầu bằng LIMBOHUB, đúng key và đúng đuôi (71, 92 hoặc 13)
             if (inputVal === currentKeyData.key && inputVal.startsWith("LIMBOHUB") && inputVal.endsWith(currentKeyData.identifier)) {
-                document.getElementById("statusMsg").innerText = `✅ Xác thực thành công! (Nhận diện đuôi: ${currentKeyData.identifier})`;
-                alert("Thành công! Key của bạn hoàn toàn chính xác.");
+                document.getElementById("statusMsg").innerText = `✅ Xác thực thành công! (Đuôi: ${currentKeyData.identifier})`;
+                alert("Thành công! Key của bạn chính xác.");
             } else {
-                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc không đúng định dạng!";
-                alert("Thất bại! Key không đúng, thiếu chữ LIMBOHUB hoặc sai đuôi nhận diện.");
+                document.getElementById("statusMsg").innerText = "❌ Sai key hoặc sai định dạng!";
+                alert("Thất bại! Key không đúng hoặc sai mã nhận diện.");
             }
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v5"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v6"));
             let now = new Date().getTime();
 
-            if (currentKeyData && now > currentKeyData.expiresAt) {
-                localStorage.removeItem("limbohub_key_v5");
-                alert("Đang chuyển hướng sang trang vượt link...");
-                location.reload(); 
-            } else {
+            if (!currentKeyData) return;
+
+            // Khi người chơi bấm sao chép key -> Bắt đầu kích hoạt đếm ngược 5 phút để tự hủy web
+            if (!currentKeyData.destroyAt) {
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
-                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép key thành công!";
+                    currentKeyData.destroyAt = now + DESTROY_TIME; // Đặt mốc thời gian tự hủy sau 5 phút
+                    localStorage.setItem("limbohub_key_v6", JSON.stringify(currentKeyData));
+                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ đóng sau 5 phút.";
                 });
             }
         }
