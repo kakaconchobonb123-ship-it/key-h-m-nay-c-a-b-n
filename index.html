@@ -108,7 +108,7 @@
             margin-top: 10px;
         }
 
-        /* Màn hình khóa khi vào trực tiếp hoặc hết hạn/hết 5 phút */
+        /* Màn hình khóa khi chưa vượt link hoặc hết hạn */
         #lockScreen {
             display: none;
             position: fixed;
@@ -160,7 +160,7 @@
     <!-- Màn hình khóa khi chưa vượt link hoặc hết hạn -->
     <div id="lockScreen">
         <h1>🔒 YÊU CẦU VƯỢT LINK</h1>
-        <p id="lockMsg">Bạn chưa vượt link hoặc phiên làm việc đã kết thúc. Vui lòng bấm vào nút bên dưới để vượt link lấy key mới!</p>
+        <p id="lockMsg">Phiên làm việc đã kết thúc hoặc truy cập không hợp lệ. Vui lòng bấm vượt link để lấy key mới!</p>
         <button style="max-width: 280px; margin-top: 15px; background: linear-gradient(135deg, #ff9900, #cc6600);" onclick="goToBypassLink()">Vượt Link Lấy Key Mới</button>
         <button style="max-width: 280px; margin-top: 10px; background: linear-gradient(135deg, #333, #555);" onclick="closeTabAction()">Đóng Tab</button>
     </div>
@@ -171,6 +171,13 @@
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số ngẫu nhiên chọn 1 đuôi
         const BYPASS_URL = "https://link4m.net/WMuZuX"; // Link vượt của bạn
 
+        // Chống bấm nút Back (Quay lại) của trình duyệt Safari/Chrome
+        history.pushState(null, null, location.href);
+        window.onpopstate = function () {
+            history.go(1);
+            triggerLockScreen("Truy cập không hợp lệ! Vui lòng vượt link chính thống để lấy key.");
+        };
+
         function getBrandPrefix() {
             let element = document.getElementById("secretBrand");
             let val = element ? element.innerText.trim() : "";
@@ -178,7 +185,7 @@
         }
 
         function createSignature(str) {
-            let secretSalt = "limbohub_secure_bypass_v9";
+            let secretSalt = "limbohub_secure_noback_v10";
             let hash = 0;
             let combined = str + secretSalt;
             for (let i = 0; i < combined.length; i++) {
@@ -193,42 +200,20 @@
             const urlParams = new URLSearchParams(window.location.search);
             let isFromBypass = urlParams.has("bypass") || sessionStorage.getItem("limbohub_passed") === "true";
 
-            // Nếu người chơi truy cập trực tiếp bằng cách dán link cũ mà không có thông lượng vượt link
-            if (!isFromBypass) {
-                triggerLockScreen("Phát hiện truy cập trực tiếp hoặc chưa vượt link! Vui lòng vượt link để nhận key mới.");
+            // Nếu không đi từ link vượt hoặc cố tình quay lại bằng nút Back mà dữ liệu phiên đã bị hủy
+            if (!isFromBypass || !localStorage.getItem("limbohub_key_v10")) {
+                triggerLockScreen("Phát hiện truy cập không hợp lệ hoặc phiên đã kết thúc!");
                 return;
             }
 
-            // Đánh dấu đã xác thực qua link vượt trong phiên làm việc
             sessionStorage.setItem("limbohub_passed", "true");
 
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
             let now = new Date().getTime();
 
-            // Nếu chưa có key, hoặc hết hạn 24h, hoặc đã kích hoạt tự hủy 5 phút -> cấp key mới ngẫu nhiên
             if (!currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
-                localStorage.removeItem("limbohub_key_v9");
-
-                let brandPrefix = getBrandPrefix();
-                let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
-                
-                let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-                let rawString = brandPrefix + "-" + randomPart + "-" + now;
-                let signature = createSignature(rawString);
-                
-                let secureKey = brandPrefix + "-" + randomPart + "-" + signature + "-" + chosenIdentifier;
-
-                currentKeyData = {
-                    key: secureKey,
-                    identifier: chosenIdentifier, 
-                    expiresAt: now + EXPIRATION_TIME,
-                    destroyAt: null
-                };
-                localStorage.setItem("limbohub_key_v9", JSON.stringify(currentKeyData));
-            }
-
-            if (currentKeyData.destroyAt && now >= currentKeyData.destroyAt) {
-                triggerLockScreen("Đã hết thời gian 5 phút. Trang web đã tự động đóng!");
+                localStorage.removeItem("limbohub_key_v10");
+                triggerLockScreen("Phiên làm việc đã hết hạn. Vui lòng vượt link mới!");
                 return;
             }
 
@@ -236,7 +221,7 @@
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
@@ -272,26 +257,28 @@
         }
 
         function triggerLockScreen(msg) {
-            localStorage.removeItem("limbohub_key_v9");
+            // Xóa sạch toàn bộ dấu vết dữ liệu key cũ để chống gian lận
+            localStorage.removeItem("limbohub_key_v10");
             sessionStorage.removeItem("limbohub_passed");
             document.getElementById("mainContainer").style.display = "none";
             document.getElementById("lockMsg").innerText = msg;
             document.getElementById("lockScreen").style.display = "flex";
         }
 
-        // Chuyển hướng người chơi sang link vượt link của bạn
         function goToBypassLink() {
             window.location.href = BYPASS_URL;
         }
 
         function closeTabAction() {
+            localStorage.removeItem("limbohub_key_v10");
+            sessionStorage.removeItem("limbohub_passed");
             window.close();
             window.location.href = "about:blank";
         }
 
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -309,7 +296,7 @@
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v9"));
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
             let now = new Date().getTime();
 
             if (!currentKeyData) return;
@@ -318,14 +305,43 @@
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
                     currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút
-                    localStorage.setItem("limbohub_key_v9", JSON.stringify(currentKeyData));
+                    localStorage.setItem("limbohub_key_v10", JSON.stringify(currentKeyData));
                     document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ đóng sau 5 phút.";
                 });
             }
         }
 
-        setInterval(updateUI, 1000);
-        window.onload = initKeySystem;
+        // Khởi tạo hệ thống và kiểm tra liên tục mỗi giây
+        window.onload = function() {
+            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Nếu có tham số bypass từ link vượt, tạo key mới tinh
+            if (urlParams.has("bypass")) {
+                let brandPrefix = getBrandPrefix();
+                let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
+                let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
+                let rawString = brandPrefix + "-" + randomPart + "-" + new Date().getTime();
+                let signature = createSignature(rawString);
+                let secureKey = brandPrefix + "-" + randomPart + "-" + signature + "-" + chosenIdentifier;
+
+                currentKeyData = {
+                    key: secureKey,
+                    identifier: chosenIdentifier, 
+                    expiresAt: new Date().getTime() + EXPIRATION_TIME,
+                    destroyAt: null
+                };
+                localStorage.setItem("limbohub_key_v10", JSON.stringify(currentKeyData));
+                sessionStorage.setItem("limbohub_passed", "true");
+                
+                // Xóa tham số trên URL cho sạch đẹp
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            initKeySystem();
+        };
+
+        setInterval(initKeySystem, 1000);
     </script>
 </body>
 </html>
