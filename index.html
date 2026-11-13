@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LimboHub - Hệ Thống Key Bảo Mật 24H</title>
+    <title>VN_HUB - Hệ Thống Key Bảo Mật 24H</title>
     <style>
         body {
             margin: 0;
@@ -18,7 +18,7 @@
             overflow: hidden;
         }
 
-        /* Chữ LIMBOHUB ẩn ở rất xa theo yêu cầu bảo mật */
+        /* Chữ VN_HUB ẩn ở rất xa theo yêu cầu bảo mật */
         .hidden-brand-token {
             position: absolute;
             top: -9999px;
@@ -137,12 +137,12 @@
 </head>
 <body>
 
-    <!-- Thẻ ẩn chứa chữ LIMBOHUB ở rất xa -->
-    <div class="hidden-brand-token" id="secretBrand">LIMBOHUB</div>
+    <!-- Thẻ ẩn chứa chữ VN_HUB ở rất xa -->
+    <div class="hidden-brand-token" id="secretBrand">VN_HUB</div>
 
     <!-- Giao diện chính -->
     <div class="container" id="mainContainer">
-        <h2>LIMBOHUB</h2>
+        <h2>VN_HUB</h2>
         <div class="brand">XÁC THỰC KEY BẢO MẬT (24H)</div>
 
         <div class="key-box" id="keyDisplay">Đang tải key...</div>
@@ -171,7 +171,7 @@
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số ngẫu nhiên chọn 1 đuôi
         const BYPASS_URL = "https://link4m.net/WMuZuX"; // Link vượt của bạn
 
-        // Chống bấm nút Back (Quay lại) của trình duyệt Safari/Chrome
+        // Chống bấm nút Back (Quay lại) của trình duyệt
         history.pushState(null, null, location.href);
         window.onpopstate = function () {
             history.go(1);
@@ -181,39 +181,42 @@
         function getBrandPrefix() {
             let element = document.getElementById("secretBrand");
             let val = element ? element.innerText.trim() : "";
-            return (val !== "") ? val : "LIMBOHUB";
-        }
-
-        function createSignature(str) {
-            let secretSalt = "limbohub_secure_noback_v10";
-            let hash = 0;
-            let combined = str + secretSalt;
-            for (let i = 0; i < combined.length; i++) {
-                let char = combined.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash |= 0; 
-            }
-            return Math.abs(hash).toString(36).toUpperCase();
+            return (val !== "") ? val : "VN_HUB";
         }
 
         function initKeySystem() {
             const urlParams = new URLSearchParams(window.location.search);
-            let isFromBypass = urlParams.has("bypass") || sessionStorage.getItem("limbohub_passed") === "true";
+            let isFromBypass = urlParams.has("bypass");
 
-            // Nếu không đi từ link vượt hoặc cố tình quay lại bằng nút Back mà dữ liệu phiên đã bị hủy
-            if (!isFromBypass || !localStorage.getItem("limbohub_key_v10")) {
-                triggerLockScreen("Phát hiện truy cập không hợp lệ hoặc phiên đã kết thúc!");
-                return;
+            // Nếu có tham số bypass từ link vượt, tạo key mới ngay lập tức
+            if (isFromBypass) {
+                localStorage.removeItem("vnhub_key_v13");
+                let brandPrefix = getBrandPrefix();
+                let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
+                let randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+                
+                // Cấu trúc chuẩn: VN_HUB-[Ngẫu nhiên]-[71/92/13]
+                let secureKey = brandPrefix + "-" + randomPart + "-" + chosenIdentifier;
+
+                let currentKeyData = {
+                    key: secureKey,
+                    identifier: chosenIdentifier, 
+                    expiresAt: new Date().getTime() + EXPIRATION_TIME,
+                    destroyAt: null
+                };
+                localStorage.setItem("vnhub_key_v13", JSON.stringify(currentKeyData));
+                sessionStorage.setItem("vnhub_passed", "true");
+                
+                // Xóa tham số bypass trên URL cho gọn gàng
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            sessionStorage.setItem("limbohub_passed", "true");
-
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
+            let hasPassed = sessionStorage.getItem("vnhub_passed") === "true";
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
             let now = new Date().getTime();
 
-            if (!currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
-                localStorage.removeItem("limbohub_key_v10");
-                triggerLockScreen("Phiên làm việc đã hết hạn. Vui lòng vượt link mới!");
+            if (!hasPassed || !currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
+                triggerLockScreen("Phát hiện truy cập không hợp lệ hoặc phiên đã kết thúc!");
                 return;
             }
 
@@ -221,7 +224,7 @@
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
@@ -257,9 +260,8 @@
         }
 
         function triggerLockScreen(msg) {
-            // Xóa sạch toàn bộ dấu vết dữ liệu key cũ để chống gian lận
-            localStorage.removeItem("limbohub_key_v10");
-            sessionStorage.removeItem("limbohub_passed");
+            localStorage.removeItem("vnhub_key_v13");
+            sessionStorage.removeItem("vnhub_passed");
             document.getElementById("mainContainer").style.display = "none";
             document.getElementById("lockMsg").innerText = msg;
             document.getElementById("lockScreen").style.display = "flex";
@@ -270,15 +272,15 @@
         }
 
         function closeTabAction() {
-            localStorage.removeItem("limbohub_key_v10");
-            sessionStorage.removeItem("limbohub_passed");
+            localStorage.removeItem("vnhub_key_v13");
+            sessionStorage.removeItem("vnhub_passed");
             window.close();
             window.location.href = "about:blank";
         }
 
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -286,7 +288,8 @@
                 return;
             }
 
-            if (inputVal === currentKeyData.key && inputVal.startsWith("LIMBOHUB") && inputVal.endsWith(currentKeyData.identifier)) {
+            // Kiểm tra bắt đầu bằng VN_HUB, khớp key và đúng đuôi ngầm (71, 92, 13)
+            if (inputVal === currentKeyData.key && inputVal.startsWith("VN_HUB") && inputVal.endsWith(currentKeyData.identifier)) {
                 document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key hợp lệ.";
                 alert("Thành công! Key của bạn chính xác.");
             } else {
@@ -296,7 +299,7 @@
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
             let now = new Date().getTime();
 
             if (!currentKeyData) return;
@@ -305,42 +308,13 @@
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
                     currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút
-                    localStorage.setItem("limbohub_key_v10", JSON.stringify(currentKeyData));
+                    localStorage.setItem("vnhub_key_v13", JSON.stringify(currentKeyData));
                     document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ đóng sau 5 phút.";
                 });
             }
         }
 
-        // Khởi tạo hệ thống và kiểm tra liên tục mỗi giây
-        window.onload = function() {
-            let currentKeyData = JSON.parse(localStorage.getItem("limbohub_key_v10"));
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            // Nếu có tham số bypass từ link vượt, tạo key mới tinh
-            if (urlParams.has("bypass")) {
-                let brandPrefix = getBrandPrefix();
-                let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
-                let randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-                let rawString = brandPrefix + "-" + randomPart + "-" + new Date().getTime();
-                let signature = createSignature(rawString);
-                let secureKey = brandPrefix + "-" + randomPart + "-" + signature + "-" + chosenIdentifier;
-
-                currentKeyData = {
-                    key: secureKey,
-                    identifier: chosenIdentifier, 
-                    expiresAt: new Date().getTime() + EXPIRATION_TIME,
-                    destroyAt: null
-                };
-                localStorage.setItem("limbohub_key_v10", JSON.stringify(currentKeyData));
-                sessionStorage.setItem("limbohub_passed", "true");
-                
-                // Xóa tham số trên URL cho sạch đẹp
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-
-            initKeySystem();
-        };
-
+        window.onload = initKeySystem;
         setInterval(initKeySystem, 1000);
     </script>
 </body>
