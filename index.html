@@ -170,6 +170,9 @@
         const DESTROY_TIME = 5 * 60 * 1000; // Đóng web sau 5 phút kể từ lúc copy
         const POSSIBLE_CODES = ["71", "92", "13"]; // 3 số ngẫu nhiên chọn 1 đuôi
         const BYPASS_URL = "https://link4m.net/WMuZuX"; // Link vượt của bạn
+        
+        // Trang web sẽ bị chèn vào để mất dấu link cũ khi hết 5 phút (Bạn có thể đổi link khác tùy ý)
+        const REDIRECT_AFTER_5MIN = "https://www.google.com"; 
 
         // Chống bấm nút Back (Quay lại) của trình duyệt
         history.pushState(null, null, location.href);
@@ -188,14 +191,12 @@
             const urlParams = new URLSearchParams(window.location.search);
             let isFromBypass = urlParams.has("bypass");
 
-            // Nếu có tham số bypass từ link vượt, tạo key mới ngay lập tức
             if (isFromBypass) {
-                localStorage.removeItem("vnhub_key_v13");
+                localStorage.removeItem("vnhub_key_v14");
                 let brandPrefix = getBrandPrefix();
                 let chosenIdentifier = POSSIBLE_CODES[Math.floor(Math.random() * POSSIBLE_CODES.length)];
                 let randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
                 
-                // Cấu trúc chuẩn: VN_HUB-[Ngẫu nhiên]-[71/92/13]
                 let secureKey = brandPrefix + "-" + randomPart + "-" + chosenIdentifier;
 
                 let currentKeyData = {
@@ -204,19 +205,26 @@
                     expiresAt: new Date().getTime() + EXPIRATION_TIME,
                     destroyAt: null
                 };
-                localStorage.setItem("vnhub_key_v13", JSON.stringify(currentKeyData));
+                localStorage.setItem("vnhub_key_v14", JSON.stringify(currentKeyData));
                 sessionStorage.setItem("vnhub_passed", "true");
                 
-                // Xóa tham số bypass trên URL cho gọn gàng
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
             let hasPassed = sessionStorage.getItem("vnhub_passed") === "true";
-            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v14"));
             let now = new Date().getTime();
 
-            if (!hasPassed || !currentKeyData || now > currentKeyData.expiresAt || (currentKeyData.destroyAt && now > currentKeyData.destroyAt)) {
+            if (!hasPassed || !currentKeyData || now > currentKeyData.expiresAt) {
                 triggerLockScreen("Phát hiện truy cập không hợp lệ hoặc phiên đã kết thúc!");
+                return;
+            }
+
+            // Nếu đã đến mốc 5 phút tự hủy sau khi copy -> Chèn trang web mới vào ngay lập tức để mất link cũ
+            if (currentKeyData.destroyAt && now >= currentKeyData.destroyAt) {
+                localStorage.removeItem("vnhub_key_v14");
+                sessionStorage.removeItem("vnhub_passed");
+                window.location.replace(REDIRECT_AFTER_5MIN); // Chèn web mới đè lên link cũ
                 return;
             }
 
@@ -224,7 +232,7 @@
         }
 
         function updateUI() {
-            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v14"));
             if (!currentKeyData) return;
 
             let now = new Date().getTime();
@@ -232,12 +240,14 @@
             if (currentKeyData.destroyAt) {
                 let timeLeftDestroy = currentKeyData.destroyAt - now;
                 if (timeLeftDestroy <= 0) {
-                    triggerLockScreen("Đã hết thời gian 5 phút. Trang web đã tự động đóng!");
+                    localStorage.removeItem("vnhub_key_v14");
+                    sessionStorage.removeItem("vnhub_passed");
+                    window.location.replace(REDIRECT_AFTER_5MIN); // Chèn web mới đè lên link cũ
                     return;
                 }
                 let min = Math.floor((timeLeftDestroy % (1000 * 60 * 60)) / (1000 * 60));
                 let sec = Math.floor((timeLeftDestroy % (1000 * 60)) / 1000);
-                document.getElementById("timerDisplay").innerText = `⚠️ Web sẽ tự đóng sau: ${min}m ${sec}s`;
+                document.getElementById("timerDisplay").innerText = `⚠️ Web sẽ tự biến mất sau: ${min}m ${sec}s`;
                 document.getElementById("keyDisplay").innerText = currentKeyData.key;
                 document.getElementById("actionBtn").innerText = "Đã sao chép";
                 document.getElementById("actionBtn").style.background = "#222";
@@ -260,7 +270,7 @@
         }
 
         function triggerLockScreen(msg) {
-            localStorage.removeItem("vnhub_key_v13");
+            localStorage.removeItem("vnhub_key_v14");
             sessionStorage.removeItem("vnhub_passed");
             document.getElementById("mainContainer").style.display = "none";
             document.getElementById("lockMsg").innerText = msg;
@@ -272,7 +282,7 @@
         }
 
         function closeTabAction() {
-            localStorage.removeItem("vnhub_key_v13");
+            localStorage.removeItem("vnhub_key_v14");
             sessionStorage.removeItem("vnhub_passed");
             window.close();
             window.location.href = "about:blank";
@@ -280,7 +290,7 @@
 
         function verifyKey() {
             let inputVal = document.getElementById("userInputKey").value.trim();
-            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v14"));
             let now = new Date().getTime();
 
             if (!currentKeyData || now > currentKeyData.expiresAt) {
@@ -288,7 +298,6 @@
                 return;
             }
 
-            // Kiểm tra bắt đầu bằng VN_HUB, khớp key và đúng đuôi ngầm (71, 92, 13)
             if (inputVal === currentKeyData.key && inputVal.startsWith("VN_HUB") && inputVal.endsWith(currentKeyData.identifier)) {
                 document.getElementById("statusMsg").innerText = "✅ Xác thực thành công! Key hợp lệ.";
                 alert("Thành công! Key của bạn chính xác.");
@@ -299,7 +308,7 @@
         }
 
         function handleAction() {
-            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v13"));
+            let currentKeyData = JSON.parse(localStorage.getItem("vnhub_key_v14"));
             let now = new Date().getTime();
 
             if (!currentKeyData) return;
@@ -307,9 +316,9 @@
             if (!currentKeyData.destroyAt) {
                 let keyText = currentKeyData.key;
                 navigator.clipboard.writeText(keyText).then(() => {
-                    currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút
-                    localStorage.setItem("vnhub_key_v13", JSON.stringify(currentKeyData));
-                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ đóng sau 5 phút.";
+                    currentKeyData.destroyAt = now + DESTROY_TIME; // Kích hoạt đếm ngược 5 phút tự hủy
+                    localStorage.setItem("vnhub_key_v14", JSON.stringify(currentKeyData));
+                    document.getElementById("statusMsg").innerText = "📋 Đã sao chép! Trang web sẽ tự biến mất sau 5 phút.";
                 });
             }
         }
